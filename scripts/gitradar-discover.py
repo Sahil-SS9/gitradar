@@ -23,7 +23,8 @@ from datetime import datetime, timezone, timedelta
 
 # ── Data Paths ──────────────────────────────────────────────────────
 
-DATA_DIR = os.path.expanduser("~/.hermes/data/github-radar")
+# Always use local data/ directory for community edition
+DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 CACHE_FILE = os.path.join(DATA_DIR, "cache.json")
 OUTPUT_FILE = os.path.join(DATA_DIR, "discoveries.json")
 METRICS_FILE = os.path.join(DATA_DIR, "metrics.json")
@@ -102,13 +103,23 @@ def save_thresholds(thresholds):
 
 
 def build_queries(thresholds):
-    """Build query dicts with dynamic star thresholds applied."""
+    """Build query dicts with dynamic star thresholds applied.
+    For primary/language queries: enforce global threshold as floor.
+    For topic queries: keep intentionally low threshold (no floor).
+    """
     base_threshold = thresholds["star_threshold"]
     queries = []
     for tpl in QUERY_TEMPLATES:
-        # Effective star level = max(query's base, global threshold * 0.75 for topic queries)
-        star_eff = max(tpl["star_base"], int(base_threshold * 0.75))
-        q = tpl["q"].replace("{stars}", str(star_eff))
+        q_template = tpl["q"]
+        # Detect topic queries by presence of "topic:" in the template
+        is_topic_query = "topic:" in q_template
+        if is_topic_query:
+            # Topic queries: use exactly the star_base from template (no floor)
+            star_eff = tpl["star_base"]
+        else:
+            # Primary/language queries: enforce global threshold as minimum
+            star_eff = max(tpl["star_base"], base_threshold)
+        q = q_template.replace("{stars}", str(star_eff))
         queries.append({"q": q, "sort": tpl["sort"], "order": tpl["order"]})
     return queries
 
@@ -144,6 +155,38 @@ def append_metrics_entry(entry):
         print(f"WARN: Failed to write metrics: {e}", file=sys.stderr)
 
 
+def _count_consecutive(window, thresholds):
+    """Analyze metrics window for consecutive days exceeding thresholds.
+    Returns (high_noise_days, good_signal_days, low_signal_days, low_noise_days).
+    """
+    hnoise = gsignal = lsig = lnoise = 0
+    for entry in window:
+        nr = entry.get("noise_rate_pct", 0)
+        sr = entry.get("signal_rate_pct", 0)
+
+        hnoise = hnoise + 1 if nr >= thresholds["noise_high_threshold_pct"] else 0
+        gsignal = gsignal + 1 if (sr >= thresholds["signal_high_threshold_pct"] and nr <= thresholds["noise_low_threshold_pct"]) else 0
+        lsig = lsig + 1 if sr <= thresholds["signal_low_threshold_pct"] else 0
+        lnoise = lnoise + 1 if nr <= thresholds["noise_low_threshold_pct"] else 0
+
+    return hnoise, gsignal, lsig, lnoise
+
+
+def _adjust_threshold(thresholds, direction, step_multiplier=1):
+    """Adjust star_threshold in the given direction, return (old, new, changed)."""
+    old = thresholds["star_threshold"]
+    if direction == "tighten":
+        new = min(old + thresholds["star_adjust_step"] * step_multiplier, thresholds["max_star_threshold"])
+    elif direction == "ease":
+        new = max(old - thresholds["star_adjust_step"], thresholds["min_star_threshold"])
+    else:
+        return old, old, False
+    if new != old:
+        thresholds["star_threshold"] = new
+        return old, new, True
+    return old, old, False
+
+
 def self_tune(thresholds, noise_rate_pct, signal_rate_pct):
     """
     Read recent metrics and adjust thresholds based on signal quality.
@@ -153,84 +196,40 @@ def self_tune(thresholds, noise_rate_pct, signal_rate_pct):
     actions = []
     metrics = load_metrics()
 
-    # Take last N entries for consecutive analysis
+    # Build analysis window: last N entries + today
     recent = metrics[-METRICS_LOOKBACK_DAYS:] if len(metrics) >= METRICS_LOOKBACK_DAYS else metrics
-
-    # Also include today's run (it's not in metrics yet)
     today = {"noise_rate_pct": noise_rate_pct, "signal_rate_pct": signal_rate_pct}
     window = list(recent) + [today] if recent else [today]
 
     if len(window) < 2:
         return thresholds, ["Not enough data to tune (need 2+ runs)"]
 
-    high_noise_consecutive = 0
-    good_signal_consecutive = 0
-    low_signal_consecutive = 0
-    low_noise_consecutive = 0
-
-    for entry in window:
-        nr = entry.get("noise_rate_pct", 0)
-        sr = entry.get("signal_rate_pct", 0)
-
-        if nr >= thresholds["noise_high_threshold_pct"]:
-            high_noise_consecutive += 1
-        else:
-            high_noise_consecutive = 0
-
-        if sr >= thresholds["signal_high_threshold_pct"] and nr <= thresholds["noise_low_threshold_pct"]:
-            good_signal_consecutive += 1
-        else:
-            good_signal_consecutive = 0
-
-        if sr <= thresholds["signal_low_threshold_pct"]:
-            low_signal_consecutive += 1
-        else:
-            low_signal_consecutive = 0
-
-        if nr <= thresholds["noise_low_threshold_pct"]:
-            low_noise_consecutive += 1
-        else:
-            low_noise_consecutive = 0
-
+    hnoise, gsignal, lsig, lnoise = _count_consecutive(window, thresholds)
     star_changed = False
 
-    # Rule 1: Sustained high noise → tighten (raise star threshold)
-    if high_noise_consecutive >= thresholds["consecutive_noise_high_days"]:
-        old = thresholds["star_threshold"]
-        new = min(old + thresholds["star_adjust_step"], thresholds["max_star_threshold"])
-        if new != old:
-            thresholds["star_threshold"] = new
+    # Rule 1: Sustained high noise → tighten
+    if hnoise >= thresholds["consecutive_noise_high_days"]:
+        old, new, changed = _adjust_threshold(thresholds, "tighten")
+        if changed:
             star_changed = True
-            actions.append(
-                f"TIGHTEN: noise >{thresholds['noise_high_threshold_pct']}% for {high_noise_consecutive}d — star_threshold {old} → {new}"
-            )
+            actions.append(f"TIGHTEN: noise >{thresholds['noise_high_threshold_pct']}% for {hnoise}d — star_threshold {old} → {new}")
 
-    # Rule 2: Sustained low noise + high signal → ease (lower star threshold)
-    elif good_signal_consecutive >= thresholds["consecutive_signal_good_days"] and low_noise_consecutive >= thresholds["consecutive_signal_good_days"]:
-        old = thresholds["star_threshold"]
-        new = max(old - thresholds["star_adjust_step"], thresholds["min_star_threshold"])
-        if new != old:
-            thresholds["star_threshold"] = new
+    # Rule 2: Sustained good signal + low noise → ease
+    elif gsignal >= thresholds["consecutive_signal_good_days"] and lnoise >= thresholds["consecutive_signal_good_days"]:
+        old, new, changed = _adjust_threshold(thresholds, "ease")
+        if changed:
             star_changed = True
-            actions.append(
-                f"EASE: signal >{thresholds['signal_high_threshold_pct']}%, noise <{thresholds['noise_low_threshold_pct']}% for {good_signal_consecutive}d — star_threshold {old} → {new}"
-            )
+            actions.append(f"EASE: signal >{thresholds['signal_high_threshold_pct']}%, noise <{thresholds['noise_low_threshold_pct']}% for {gsignal}d — star_threshold {old} → {new}")
 
     # Rule 3: Sustained very low signal → aggressive tighten
-    elif low_signal_consecutive >= thresholds["consecutive_signal_low_days"]:
-        old = thresholds["star_threshold"]
-        new = min(old + thresholds["star_adjust_step"] * 2, thresholds["max_star_threshold"])
-        if new != old:
-            thresholds["star_threshold"] = new
+    elif lsig >= thresholds["consecutive_signal_low_days"]:
+        old, new, changed = _adjust_threshold(thresholds, "tighten", 2)
+        if changed:
             star_changed = True
-            actions.append(
-                f"AGGRESSIVE TIGHTEN: signal <{thresholds['signal_low_threshold_pct']}% for {low_signal_consecutive}d — star_threshold {old} → {new}"
-            )
+            actions.append(f"AGGRESSIVE TIGHTEN: signal <{thresholds['signal_low_threshold_pct']}% for {lsig}d — star_threshold {old} → {new}")
 
     if not star_changed:
-        actions.append(
-            f"HOLD: noise {noise_rate_pct:.1f}%, signal {signal_rate_pct:.1f}% — thresholds unchanged"
-        )
+        actions.append(f"HOLD: noise {noise_rate_pct:.1f}%, signal {signal_rate_pct:.1f}% — thresholds unchanged")
 
     # Record tuning event
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -241,7 +240,6 @@ def self_tune(thresholds, noise_rate_pct, signal_rate_pct):
         "star_threshold": thresholds["star_threshold"],
         "actions": list(actions),
     })
-    # Keep last 90 tuning events
     if len(thresholds["history"]) > 90:
         thresholds["history"] = thresholds["history"][-90:]
     thresholds["last_tuned"] = now
@@ -252,6 +250,15 @@ def self_tune(thresholds, noise_rate_pct, signal_rate_pct):
 # ── Helpers ─────────────────────────────────────────────────────────
 
 
+_RATE_LIMITED = False
+
+def is_rate_limited():
+    return _RATE_LIMITED
+
+def set_rate_limited():
+    global _RATE_LIMITED
+    _RATE_LIMITED = True
+
 def get_date_filter():
     """Returns the `created:>YYYY-MM-DD` qualifier for the recency window."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=RECENCY_DAYS)
@@ -259,14 +266,17 @@ def get_date_filter():
 
 
 def gh_auth_token():
-    """Get GitHub PAT from gh CLI."""
-    result = subprocess.run(
-        ["gh", "auth", "token"], capture_output=True, text=True, timeout=10
-    )
-    if result.returncode != 0:
-        print(f"WARN: gh auth failed: {result.stderr.strip()}", file=sys.stderr)
-        return None
-    return result.stdout.strip()
+    """Get GitHub PAT from gh CLI. Result is cached after first call."""
+    if not hasattr(gh_auth_token, "_token"):
+        result = subprocess.run(
+            ["gh", "auth", "token"], capture_output=True, text=True, timeout=10
+        )
+        if result.returncode != 0:
+            print(f"WARN: gh auth failed: {result.stderr.strip()}", file=sys.stderr)
+            gh_auth_token._token = None
+        else:
+            gh_auth_token._token = result.stdout.strip()
+    return gh_auth_token._token
 
 
 def github_search(query, sort="stars", order="desc", per_page=100, page=1):
@@ -295,6 +305,8 @@ def github_search(query, sort="stars", order="desc", per_page=100, page=1):
             return items, data.get("total_count", 0)
     except urllib.error.HTTPError as e:
         print(f"WARN: GitHub API error {e.code} for query '{query[:60]}': {e.reason}", file=sys.stderr)
+        if e.code in (403, 429):
+            set_rate_limited()
         return [], 0
     except Exception as e:
         print(f"WARN: GitHub API exception: {e}", file=sys.stderr)
@@ -424,12 +436,20 @@ def load_cache():
         return set()
 
 
+MAX_CACHE_SIZE = 10000  # Maximum cache entries before pruning
+PRUNE_TARGET = 5000  # When we prune, keep this many
+
 def save_cache(seen):
-    """Save seen repo names with expiry."""
+    """Save seen repo names, pruning if too large."""
     try:
         os.makedirs(DATA_DIR, exist_ok=True)
+        seen_list = list(seen)
+        if len(seen_list) > MAX_CACHE_SIZE:
+            # Prune to keep the most recently added entries
+            seen_list = seen_list[-PRUNE_TARGET:]
+            print(f"CACHE: pruned to {PRUNE_TARGET} entries (was {MAX_CACHE_SIZE}+)", file=sys.stderr)
         with open(CACHE_FILE, "w") as f:
-            json.dump({"seen": list(seen)}, f)
+            json.dump({"seen": seen_list}, f)
     except Exception as e:
         print(f"WARN: Failed to write cache: {e}", file=sys.stderr)
 

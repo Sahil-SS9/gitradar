@@ -25,9 +25,96 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 STACK_FILE = os.path.join(os.path.dirname(__file__), "..", "config", "stack.json")
 
 def load_stack():
-    """Load stack preferences from config/stack.json."""
-    with open(STACK_FILE) as f:
-        return json.load(f)
+    """Load stack preferences from config/stack.json, merging with defaults for safety."""
+    # Built-in defaults (same as in config/stack.json)
+    defaults = {
+        "name": "default",
+        "description": "Default tech stack preferences for scoring",
+        "languages": {
+            "python": 30,
+            "typescript": 30,
+            "javascript": 20,
+            "rust": 25,
+            "go": 20,
+            "kotlin": 15,
+            "swift": 15,
+            "c++": 10,
+            "java": 10,
+            "shell": 5,
+            "lua": 10,
+            "zig": 15
+        },
+        "frameworks": {
+            "react": 30,
+            "react-native": 35,
+            "expo": 30,
+            "flutter": 25,
+            "nextjs": 20,
+            "vue": 15,
+            "django": 15,
+            "fastapi": 20
+        },
+        "ecosystem_keywords": [
+            "mcp",
+            "agent-framework",
+            "agent-sdk",
+            "developer-tools",
+            "ai-agents",
+            "llm",
+            "llmops",
+            "prompt-engineering",
+            "function-calling",
+            "tool-use",
+            "cli",
+            "automation",
+            "devops",
+            "react-native",
+            "expo",
+            "convex",
+            "supabase",
+            "flutter",
+            "typescript",
+            "python",
+            "rust"
+        ],
+        "topic_bonus": 10,
+        "license_preferences": {
+            "MIT": 10,
+            "Apache-2.0": 9,
+            "BSD-2-Clause": 8,
+            "BSD-3-Clause": 8,
+            "MIT-0": 10,
+            "0BSD": 8,
+            "Unlicense": 7,
+            "CC0-1.0": 6,
+            "GPL-2.0": 4,
+            "GPL-3.0": 3,
+            "AGPL-3.0": 2,
+            "LGPL-2.1": 5,
+            "LGPL-3.0": 5,
+            "MPL-2.0": 6,
+            "BSL-1.0": 5
+        },
+        "noise_description_keywords": [
+            "mod menu", "hack", "cheat", "spoofer", "aimbot", "wallhack",
+            "unlocker", "crack", "cracked", "free download", "spammer"
+        ]
+    }
+    try:
+        with open(STACK_FILE) as f:
+            user_stack = json.load(f)
+        # Deep merge: user values override defaults
+        def deep_merge(base, update):
+            for key, value in update.items():
+                if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+                    deep_merge(base[key], value)
+                else:
+                    base[key] = value
+        deep_merge(defaults, user_stack)
+        return defaults
+    except (json.JSONDecodeError, OSError):
+        # If file missing or invalid, return hard-coded defaults
+        return defaults
 
 def load_json_file(filepath):
     """Load a JSON file, return empty dict if not found or invalid."""

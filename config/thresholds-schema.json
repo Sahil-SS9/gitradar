@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GitRadar Thresholds Configuration",
+  "type": "object",
+  "properties": {
+    "star_threshold": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000,
+      "default": 100,
+      "description": "Global minimum star threshold applied to all queries"
+    },
+    "min_star_threshold": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Absolute minimum star threshold - never go below this"
+    },
+    "max_star_threshold": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Absolute maximum star threshold - never exceed this"
+    },
+    "noise_keywords": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": ["awesome", "curated list", "awesome list", "learn", "tutorial", "list", "resource", "cheatsheet"],
+      "description": "Keywords in repo name/description that indicate noise"
+    },
+    "language_filters": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": ["HTML", "CSS", "Markdown"],
+      "description": "Languages considered non-code and filtered out"
+    },
+    "dead_repo_forks_ratio": {
+      "type": "number",
+      "minimum": 0,
+      "default": 3.0,
+      "description": "Repo considered dead if forks > stars * this ratio"
+    },
+    "dead_repo_min_stars": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 10,
+      "description": "Minimum stars for a repo to not be considered dead by fork ratio alone"
+    },
+    "consecutive_noise_high_days": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 3,
+      "description": "Number of consecutive high-noise runs before increasing threshold"
+    },
+    "consecutive_signal_good_days": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 3,
+      "description": "Number of consecutive good-signal runs before decreasing threshold"
+    },
+    "consecutive_signal_low_days": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5,
+      "description": "Number of consecutive low-signal runs before aggressive threshold increase"
+    },
+    "noise_high_threshold_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 40.0,
+      "description": "Noise percentage above which is considered 'high'"
+    },
+    "noise_low_threshold_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 20.0,
+      "description": "Noise percentage below which is considered 'low'"
+    },
+    "signal_high_threshold_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 60.0,
+      "description": "Signal percentage above which is considered 'high'"
+    },
+    "signal_low_threshold_pct": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 10.0,
+      "description": "Signal percentage below which is considered 'low'"
+    },
+    "star_adjust_step": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 25,
+      "description": "Amount to adjust star threshold up or down during tuning"
+    }
+  },
+  "required": ["star_threshold", "min_star_threshold", "max_star_threshold"]
+}

@@ -1,0 +1,11 @@
+# Example cron configuration for GitRadar Community Edition
+# To use with cron or systemd timers
+
+# Run discovery every day at 08:30 UTC
+30 8 * * * cd /path/to/gitradar-community && python3 scripts/github-radar-discover.py >> logs/discoveries.log 2>&1
+
+# Optional: Run weekly upstream check (if you maintain a wiki of repos)
+# 0 10 * * 1 cd /path/to/gitradar-community && python3 scripts/upstream-monitor.py >> logs/upstream.log 2>&1
+
+# Log rotation example (daily)
+# 0 0 * * * find /path/to/gitradar-community/logs -name "*.log" -mtime +7 -delete

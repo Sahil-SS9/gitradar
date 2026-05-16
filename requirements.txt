@@ -1,0 +1,2 @@
+# No external dependencies required beyond Python standard library and gh CLI
+# If you want to add dependencies in the future, list them here.

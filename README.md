@@ -84,6 +84,10 @@ Define your technology stack for scoring:
 - License preferences (MIT preferred, etc.)
 - Noise description keywords (to detect sketchy repos)
 
+Scoring is customised per-user by editing `config/stack.json`. The default config is generic — tune the weights to your actual stack for relevant results.
+
+**Future enhancement**: A helper script (`scripts/generate-stack.py`) that scans local `package.json`, `requirements.txt`, `Cargo.toml`, etc. and analyses git commit history for language/framework usage to generate a suggested `stack.json` as a starting point — leaving final tuning to you.
+
 ### Tuning Parameters (auto-managed in `data/thresholds.json`)
 - Star threshold (auto-adjusted based on signal quality)
 - Noise/signal thresholds for tuning decisions

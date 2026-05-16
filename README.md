@@ -167,5 +167,3 @@ Please ensure any changes maintain the deterministic nature of the discovery scr
 ## Related Projects
 
 - [Hermes Agent](https://github.com/NousResearch/hermes-agent) — The AI agent framework that originally used GitRadar
-- [repo-radar](https://github.com/verysleepylemon/repo-radar) — Rust-based GitHub monitor (different focus)
-- [ReproRadar](https://reporadar.xyz) — Free newsletter of AI business ideas from GitHub trending

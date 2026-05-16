@@ -1,10 +1,10 @@
-# GitRadar Community Edition
+# GitRadar
 
 Automated GitHub repository discovery with self-tuning thresholds and quality metrics.
 
 ## Overview
 
-GitRadar is an automated pipeline that discovers trending GitHub repositories, filters out noise, and surfaces actionable finds. Originally built for the KENSEI AI agent ecosystem, this community edition makes it available to developers who want to monitor GitHub for:
+GitRadar is an automated pipeline that discovers trending GitHub repositories, filters out noise, and surfaces actionable finds. Originally built for the Hermes Agent System, this community edition makes it available to developers using any AI agent framework who want to monitor GitHub for:
 
 - New tools and libraries in their stack
 - Emerging trends in specific topics (MCP, agent frameworks, etc.)
@@ -18,7 +18,7 @@ GitRadar is an automated pipeline that discovers trending GitHub repositories, f
 - **Noise Filtering**: Removes tutorial repos, awesome lists, dead repos, and non-code
 - **Deduplication**: Avoids processing the same repo multiple times
 - **Quality Metrics**: Tracks signal-to-noise ratio over time
-- **Hermes Agent Ready**: Outputs JSON compatible with existing cron jobs
+- **Agent Agnostic**: Outputs JSON compatible with Hermes Agent, OpenClaw, Claude Code, and any other AI agent system
 
 ## Quick Start
 
@@ -27,14 +27,11 @@ GitRadar is an automated pipeline that discovers trending GitHub repositories, f
 git clone https://github.com/yourusername/gitradar-community.git
 cd gitradar-community
 
-# Install dependencies (none required beyond Python 3.8+ and gh CLI)
-pip install -r requirements.txt  # Actually no deps needed
-
 # Ensure you're authenticated to GitHub
 gh auth login
 
 # Run discovery once
-python3 scripts/github-radar-discover.py
+python3 scripts/gitradar-discover.py
 
 # View results
 cat data/discoveries.json
@@ -123,14 +120,21 @@ The script outputs JSON to stdout and saves a full copy to `data/discoveries.jso
 }
 ```
 
-## Integration with Hermes Agent
+## Integration with AI Agent Systems
 
-If you're using Hermes Agent, GitRadar integrates directly with the existing `code-discovery-pipeline` skill:
+GitRadar works with any AI agent framework that can consume JSON and execute cron jobs:
 
-1. Copy `scripts/github-radar-discover.py` to `~/.hermes/scripts/`
-2. Ensure the `code-discovery-pipeline` skill is installed (it's bundled with Hermes)
-3. The merged cron job at 08:30 will automatically pick it up
-4. Results feed into the research board for classification and kensei-review
+### Hermes Agent
+Copy `scripts/gitradar-discover.py` to `~/.hermes/scripts/` and configure a cron with context_from pointing to the discovery script output. The `code-discovery-pipeline` skill handles classification and routing.
+
+### OpenClaw
+Set up a cron job that runs the discovery script and pipes its output into a classification workflow. The structured JSON output is directly consumable by OpenClaw's task system.
+
+### Claude Code / Codex
+Use the output as a data source for coding agent sessions — feed the JSON into your context when asking an agent to evaluate trending repositories in your stack.
+
+### Any Other Framework
+The script is self-contained (standard library only) and outputs clean JSON to stdout. Pipe it into any agent system, notification pipeline, or dashboard.
 
 ## Self-Tuning Explained
 

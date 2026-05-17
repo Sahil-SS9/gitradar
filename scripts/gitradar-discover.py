@@ -255,6 +255,10 @@ _RATE_LIMITED = False
 def is_rate_limited():
     return _RATE_LIMITED
 
+def reset_rate_limited():
+    global _RATE_LIMITED
+    _RATE_LIMITED = False
+
 def set_rate_limited():
     global _RATE_LIMITED
     _RATE_LIMITED = True
@@ -266,7 +270,11 @@ def get_date_filter():
 
 
 def gh_auth_token():
-    """Get GitHub PAT from gh CLI. Result is cached after first call."""
+    """Get GitHub PAT from env or gh CLI. Result is cached after first call."""
+    env_token = (os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or "").strip()
+    if env_token:
+        return env_token
+
     if not hasattr(gh_auth_token, "_token"):
         result = subprocess.run(
             ["gh", "auth", "token"], capture_output=True, text=True, timeout=10
@@ -459,22 +467,24 @@ def save_cache(seen):
 
 def collect(queries):
     """Stage 1: Data Collection. Returns raw list of repos."""
+    reset_rate_limited()
     seen_cache = load_cache()
     seen = set(seen_cache)  # mutable working set
     all_repos = []
-    rate_limited = False
 
     # ── Primary + Secondary API searches ──
     for query_def in queries:
-        if rate_limited:
+        if is_rate_limited():
             break
         q = query_def["q"]
         sort = query_def.get("sort", "stars")
         order = query_def.get("order", "desc")
 
         page = 1
-        while page <= MAX_PAGES and not rate_limited:
+        while page <= MAX_PAGES and not is_rate_limited():
             items, total = github_search(q, sort, order, 100, page)
+            if is_rate_limited():
+                break
             if not items:
                 break
             for item in items:

@@ -165,16 +165,16 @@ def language_score(language, stack):
     """Score based on language match."""
     if not language:
         return 0.0
-    return float(stack["languages"].get(language, 0))
+    language_key = str(language).lower()
+    return float(stack["languages"].get(language_key, 0))
 
 def framework_score(topics, stack):
     """Score based on framework match in topics."""
     if not topics:
         return 0.0
-    for topic in topics:
-        if topic in stack["frameworks"]:
-            return float(stack["frameworks"][topic])
-    return 0.0
+    frameworks = stack["frameworks"]
+    scores = (frameworks.get(str(topic).lower(), 0) for topic in topics)
+    return float(max(scores, default=0))
 
 def description_score(description, stack):
     """Score based on description quality and noise keywords."""

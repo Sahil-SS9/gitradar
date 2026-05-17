@@ -63,6 +63,8 @@ cd gitradar
 
 # Ensure you're authenticated to GitHub
 gh auth login
+# Or provide a token directly
+export GITHUB_TOKEN=<your-token>
 
 # Run discovery (collects and filters repos)
 python3 scripts/gitradar-discover.py
@@ -203,10 +205,16 @@ All tuning decisions are logged in the discovery output and saved to `thresholds
 ## Requirements
 
 - Python 3.8+
-- GitHub CLI (`gh`) authenticated with `repo` scope
+- GitHub CLI (`gh`) authenticated with `repo` scope, or a `GITHUB_TOKEN`/`GH_TOKEN` environment variable
 - Internet access to GitHub API
 
 No Python packages required — uses only standard library.
+
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
 
 ## License
 

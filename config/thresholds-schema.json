@@ -36,6 +36,14 @@
       "default": ["HTML", "CSS", "Markdown"],
       "description": "Languages considered non-code and filtered out"
     },
+    "spam_name_patterns": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": ["-(19|20)\\d\\d(-|$)", "(?i)(crack|keygen|nulled|allprompts|free-?download|activation-?key|license-?key|-latest-|version-\\d)"],
+      "description": "Regex patterns matched against the repo name to filter star-farmed spam (date/version-suffixed names, cracked-software bait). Keep high-precision so legitimate names like llama-3 are not caught."
+    },
     "dead_repo_forks_ratio": {
       "type": "number",
       "minimum": 0,

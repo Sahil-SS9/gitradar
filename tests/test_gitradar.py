@@ -86,6 +86,31 @@ class GitRadarDiscoverTests(unittest.TestCase):
             (True, "dead_repo"),
         )
 
+    def test_spam_name_filter_catches_farmed_repos_not_legit_names(self):
+        def repo(full_name):
+            return {
+                "full_name": full_name,
+                "description": "a real description",
+                "stars": 200,
+                "forks": 0,
+                "language": "Go",
+                "topics": [],
+                "created_at": "",
+                "pushed_at": "",
+                "open_issues": 0,
+                "license": "",
+                "html_url": f"https://github.com/{full_name}",
+                "source": "api",
+            }
+
+        th = self.discover.DEFAULT_THRESHOLDS
+        for spam in ("x/FL-Product-Version-26", "x/WorpGPT-Latest-2026-AllPrompts",
+                     "x/DeepFake-AI-2026-RealTime", "x/photoshop-crack-keygen"):
+            self.assertEqual(self.discover.classify_noise(repo(spam), th), (True, "spam_name"), spam)
+        for legit in ("meta/llama-3", "openai/gpt-4", "vercel/next.js", "anthropics/claude-mcp"):
+            _, reason = self.discover.classify_noise(repo(legit), th)
+            self.assertNotEqual(reason, "spam_name", legit)
+
 
 class GitRadarScoreTests(unittest.TestCase):
     def setUp(self):

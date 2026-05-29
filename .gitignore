@@ -1,2 +1,5 @@
 # User-generated data (cache, discoveries, thresholds, metrics, recommendations)
 data/
+
+__pycache__/
+*.pyc

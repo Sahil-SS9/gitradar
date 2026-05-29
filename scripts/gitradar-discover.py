@@ -61,6 +61,12 @@ DEFAULT_THRESHOLDS = {
     "max_star_threshold": 500,
     "noise_keywords": ["awesome", "curated list", "awesome list", "learn", "tutorial", "list", "resource", "cheatsheet"],
     "language_filters": ["HTML", "CSS", "Markdown"],
+    # High-precision spam patterns for star-farmed repos (date-suffixed names,
+    # cracked-software bait). Conservative: must not catch llama-3 / gpt-4.
+    "spam_name_patterns": [
+        r"-(19|20)\d\d(-|$)",
+        r"(?i)(crack|keygen|nulled|allprompts|free-?download|activation-?key|license-?key|-latest-|version-\d)",
+    ],
     "dead_repo_forks_ratio": 3.0,
     "dead_repo_min_stars": 10,
     "consecutive_noise_high_days": 3,
@@ -385,6 +391,7 @@ def build_noise_patterns(thresholds):
     lang_filters = thresholds.get("language_filters", DEFAULT_THRESHOLDS["language_filters"])
     fork_ratio = thresholds.get("dead_repo_forks_ratio", 3.0)
     dead_min = thresholds.get("dead_repo_min_stars", 10)
+    spam_patterns = thresholds.get("spam_name_patterns", DEFAULT_THRESHOLDS["spam_name_patterns"])
 
     return {
         "awesome_list": lambda r: any(
@@ -404,10 +411,14 @@ def build_noise_patterns(thresholds):
             kw in r["full_name"].lower().split("/")[1]
             for kw in keywords
         ),
+        "spam_name": lambda r: any(
+            re.search(p, r["full_name"].split("/")[-1])
+            for p in spam_patterns
+        ),
     }
 
 
-NOISE_ORDER = ["awesome_list", "non_code", "name_noise", "tutorial_content", "dead_repo"]
+NOISE_ORDER = ["awesome_list", "non_code", "name_noise", "spam_name", "tutorial_content", "dead_repo"]
 
 
 def classify_noise(repo, thresholds):
